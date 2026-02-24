@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="360dp"
+    android:layout_height="wrap_content"
+    android:minWidth="320dp"
+    android:background="#2A2A2A"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/dialog_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="New Item"
+        android:textColor="#EEEEEE"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <EditText
+        android:id="@+id/dialog_input"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="18dp"
+        android:background="#1A1A1A"
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp"
+        android:textColor="#FFFFFF"
+        android:textSize="15sp"
+        android:hint="Enter name..."
+        android:textColorHint="#555555"
+        android:inputType="text"
+        android:maxLines="1"
+        android:imeOptions="actionDone|flagNoExtractUi" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="25dp"
+        android:gravity="end"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btn_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:text="CANCEL"
+            android:textColor="#AAAAAA"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btn_confirm"
+            android:layout_width="110dp"
+            android:layout_height="40dp"
+            android:layout_marginLeft="12dp"
+            android:background="#385170"
+            android:text="CREATE"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</LinearLayout>
