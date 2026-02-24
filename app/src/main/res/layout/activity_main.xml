@@ -1,59 +1,105 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal"
     android:background="#121212">
 
     <LinearLayout
+        android:id="@+id/top_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="30dp"
+        android:background="#2D2D2D"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="10dp"
+        android:paddingRight="10dp">
+        
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Zayk Engine | Editor"
+            android:textColor="#888888"
+            android:textSize="11sp"
+            android:fontFamily="sans-serif-condensed" />
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/left_panel"
-        android:layout_width="180dp"
+        android:layout_width="100dp"
         android:layout_height="match_parent"
-        android:background="#1E1E1E"
+        android:layout_below="@id/top_toolbar"
+        android:background="#1A1A1A"
         android:orientation="vertical">
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="HIERARCHY"
-            android:textColor="#888888"
-            android:padding="10dp"
-            android:textSize="10sp"
-            android:textStyle="bold"
-            android:background="#252525"/>
+            android:textColor="#555555"
+            android:textSize="9sp"
+            android:padding="3dp"
+            android:fontFamily="sans-serif-condensed-light"
+            android:background="#252525"
+            android:gravity="center"/>
     </LinearLayout>
 
-    <View
+    <FrameLayout
         android:id="@+id/left_resizer"
-        android:layout_width="8dp"
+        android:layout_width="20dp"
         android:layout_height="match_parent"
-        android:background="#121212" />
-
-    <com.zayk.engine.ZaykSurfaceView
-        android:id="@+id/zayk_surface_view"
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1" />
-
-    <View
-        android:id="@+id/right_resizer"
-        android:layout_width="8dp"
-        android:layout_height="match_parent"
-        android:background="#121212" />
+        android:layout_below="@id/top_toolbar"
+        android:layout_toRightOf="@id/left_panel"
+        android:layout_marginLeft="-10dp"
+        android:clickable="true"
+        android:focusable="true">
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_horizontal"
+            android:background="#333333" />
+    </FrameLayout>
 
     <LinearLayout
         android:id="@+id/right_panel"
-        android:layout_width="180dp"
+        android:layout_width="130dp"
         android:layout_height="match_parent"
-        android:background="#1E1E1E"
+        android:layout_alignParentRight="true"
+        android:layout_below="@id/top_toolbar"
+        android:background="#1A1A1A"
         android:orientation="vertical">
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="INSPECTOR"
-            android:textColor="#888888"
-            android:padding="10dp"
-            android:textSize="10sp"
-            android:textStyle="bold"
-            android:background="#252525"/>
+            android:textColor="#555555"
+            android:textSize="9sp"
+            android:padding="3dp"
+            android:fontFamily="sans-serif-condensed-light"
+            android:background="#252525"
+            android:gravity="center"/>
     </LinearLayout>
 
-</LinearLayout>
+    <FrameLayout
+        android:id="@+id/right_resizer"
+        android:layout_width="20dp"
+        android:layout_height="match_parent"
+        android:layout_below="@id/top_toolbar"
+        android:layout_toLeftOf="@id/right_panel"
+        android:layout_marginRight="-10dp"
+        android:clickable="true"
+        android:focusable="true">
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_horizontal"
+            android:background="#333333" />
+    </FrameLayout>
+
+    <com.zayk.engine.ZaykSurfaceView
+        android:id="@+id/zayk_surface_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/top_toolbar"
+        android:layout_toRightOf="@id/left_resizer"
+        android:layout_toLeftOf="@id/right_resizer" />
+
+</RelativeLayout>

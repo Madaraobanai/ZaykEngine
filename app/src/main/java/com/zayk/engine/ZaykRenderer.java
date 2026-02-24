@@ -17,13 +17,13 @@ public class ZaykRenderer implements GLSurfaceView.Renderer {
     public static float camX = 0, camY = 5, camZ = 15;
     public static float camPitch = 0, camYaw = 0;
 
-    // Inputs para o Lua
-    public static float touchDX = 0, touchDY = 0; // Delta para Olhar (Direita)
-    public static float moveDX = 0, moveDY = 0;   // Vetor constante para Andar (Esquerda)
+    // Inputs para o Lua (Agora relativos ao Viewport central)
+    public static float touchDX = 0, touchDY = 0; 
+    public static float moveDX = 0, moveDY = 0;   
     public static boolean isLeftActive = false;
     public static boolean isRightActive = false;
 
-    // Controle de Multitoque e Joystick
+    // Gestão de Multitoque
     private int leftPointerId = -1;
     private int rightPointerId = -1;
     private float startLeftX, startLeftY;
@@ -34,7 +34,8 @@ public class ZaykRenderer implements GLSurfaceView.Renderer {
     private final float[] projectionMatrix = new float[16];
     private final float[] viewMatrix = new float[16];
 
-    private int screenWidth;
+    private int viewportWidth;
+    private int viewportHeight;
 
     public ZaykRenderer(Context context, Grid grid) {
         this.mGrid = grid;
@@ -43,29 +44,32 @@ public class ZaykRenderer implements GLSurfaceView.Renderer {
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-        GLES20.glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
+        // Cor de fundo estilo "Dark Theme" de editores (Cinza Profundo)
+        GLES20.glClearColor(0.12f, 0.12f, 0.13f, 1.0f);
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
         if (mGrid != null) mGrid.setup();
     }
 
     @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
+        // ESSENCIAL: O OpenGL ajusta-se automaticamente ao espaço entre as Sidebars
         GLES20.glViewport(0, 0, width, height);
-        this.screenWidth = width;
+        this.viewportWidth = width;
+        this.viewportHeight = height;
+        
         float ratio = (float) width / height;
+        // FOV de 45 graus para minimizar distorções de borda no editor
         Matrix.perspectiveM(projectionMatrix, 0, 45, ratio, 0.1f, 1000.0f);
     }
 
     @Override
     public void onDrawFrame(GL10 gl) {
-        // 1. O Lua processa a lógica de voo contínuo
         if (luaManager != null) {
             luaManager.update();
         }
 
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
 
-        // 2. Montagem da Câmera (Ordem correta para Drone/FPS)
         Matrix.setIdentityM(viewMatrix, 0);
         Matrix.rotateM(viewMatrix, 0, camPitch, 1, 0, 0);
         Matrix.rotateM(viewMatrix, 0, camYaw, 0, 1, 0);
@@ -77,8 +81,7 @@ public class ZaykRenderer implements GLSurfaceView.Renderer {
             mGrid.draw(vPMatrix);
         }
 
-        // 3. Reset suave do Delta de rotação (apenas para o olhar não ficar infinito)
-        // Nota: moveDX/DY NÃO são resetados aqui para manter o movimento contínuo
+        // Suavização do delta de olhar
         touchDX *= 0.5f;
         touchDY *= 0.5f;
     }
@@ -87,18 +90,21 @@ public class ZaykRenderer implements GLSurfaceView.Renderer {
         int action = e.getActionMasked();
         int index = e.getActionIndex();
         int id = e.getPointerId(index);
+        
+        // Coordenadas locais dentro da View do OpenGL
         float x = e.getX(index);
         float y = e.getY(index);
 
         switch (action) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
-                if (x < screenWidth / 2f && leftPointerId == -1) {
+                // Divisão dinâmica: Lado esquerdo do viewport para mover, direito para olhar
+                if (x < viewportWidth / 2f && leftPointerId == -1) {
                     leftPointerId = id;
-                    startLeftX = x; // Define o centro do Joystick
+                    startLeftX = x;
                     startLeftY = y;
                     isLeftActive = true;
-                } else if (x >= screenWidth / 2f && rightPointerId == -1) {
+                } else if (x >= viewportWidth / 2f && rightPointerId == -1) {
                     rightPointerId = id;
                     lastRightX = x;
                     lastRightY = y;
@@ -113,11 +119,9 @@ public class ZaykRenderer implements GLSurfaceView.Renderer {
                     float py = e.getY(i);
 
                     if (pId == leftPointerId) {
-                        // Calcula a distância do centro (Joystick Virtual)
                         moveDX = px - startLeftX;
                         moveDY = py - startLeftY;
                     } else if (pId == rightPointerId) {
-                        // Calcula o deslocamento frame-a-frame (Olhar)
                         touchDX = px - lastRightX;
                         touchDY = py - lastRightY;
                         lastRightX = px;
@@ -132,7 +136,7 @@ public class ZaykRenderer implements GLSurfaceView.Renderer {
                 if (id == leftPointerId) {
                     leftPointerId = -1;
                     isLeftActive = false;
-                    moveDX = 0; moveDY = 0; // Para o drone ao soltar
+                    moveDX = 0; moveDY = 0;
                 } else if (id == rightPointerId) {
                     rightPointerId = -1;
                     isRightActive = false;
