@@ -2,87 +2,93 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#121212"
-    android:orientation="horizontal">
+    android:orientation="horizontal"
+    android:background="#151515">
 
     <LinearLayout
         android:id="@+id/left_panel"
         android:layout_width="180dp"
         android:layout_height="match_parent"
-        android:background="#252525"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:background="#202020">
 
         <LinearLayout
+            android:id="@+id/scene_container"
             android:layout_width="match_parent"
-            android:layout_height="35dp"
-            android:background="#1A1A1A"
-            android:orientation="horizontal">
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Cena (Hierarchy)"
+                android:padding="8dp"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:textColor="#CCCCCC"
+                android:background="#2D2D2D"/>
 
-            <Button
-                android:id="@+id/btn_tab_hierarchy"
-                android:layout_width="0dp"
+            <ListView
+                android:id="@+id/list_hierarchy"
+                android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:background="#1A1A1A"
-                android:text="Hierarchy"
-                android:textAllCaps="false"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp" />
-
-            <Button
-                android:id="@+id/btn_tab_project"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:background="#252525"
-                android:text="Project"
-                android:textAllCaps="false"
-                android:textColor="#888888"
-                android:textSize="10sp" />
+                android:divider="#1A1A1A"
+                android:dividerHeight="0.5dp"/>
         </LinearLayout>
 
-        <ListView
-            android:id="@+id/list_hierarchy"
+        <View
+            android:id="@+id/horizontal_resizer"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:visibility="visible" />
+            android:layout_height="10dp"
+            android:background="#101010"
+            android:contentDescription="Arraste para ajustar altura"/>
 
         <LinearLayout
             android:id="@+id/project_container"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:visibility="gone">
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Arquivos do Projeto"
+                android:padding="8dp"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:textColor="#CCCCCC"
+                android:background="#2D2D2D"/>
 
             <EditText
                 android:id="@+id/search_bar"
                 android:layout_width="match_parent"
-                android:layout_height="36dp"
-                android:layout_margin="6dp"
-                android:background="#1A1A1A"
-                android:hint="🔍 Search..."
-                android:textColorHint="#555555"
+                android:layout_height="wrap_content"
+                android:hint="Filtrar Arquivos..."
+                android:textSize="11sp"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                android:paddingLeft="10dp"
-                android:maxLines="1"
+                android:background="#1A1A1A"
+                android:padding="6dp"
+                android:layout_margin="4dp"
                 android:inputType="text"
-                android:imeOptions="actionDone|flagNoExtractUi" />
+                android:maxLines="1"/>
 
             <ListView
                 android:id="@+id/list_project"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:divider="#1A1A1A"
-                android:dividerHeight="1dp" />
+                android:dividerHeight="0.5dp"/>
         </LinearLayout>
     </LinearLayout>
 
     <View
         android:id="@+id/left_resizer"
-        android:layout_width="8dp"
+        android:layout_width="4dp"
         android:layout_height="match_parent"
-        android:background="#1A1A1A" />
+        android:background="#000000"
+        android:alpha="0.5"/>
 
     <com.zayk.engine.ZaykSurfaceView
         android:id="@+id/zayk_surface_view"
@@ -92,26 +98,28 @@
 
     <View
         android:id="@+id/right_resizer"
-        android:layout_width="8dp"
+        android:layout_width="4dp"
         android:layout_height="match_parent"
-        android:background="#1A1A1A" />
+        android:background="#000000"
+        android:alpha="0.5"/>
 
     <LinearLayout
         android:id="@+id/right_panel"
         android:layout_width="180dp"
         android:layout_height="match_parent"
-        android:background="#252525"
+        android:background="#202020"
         android:orientation="vertical">
 
         <TextView
             android:layout_width="match_parent"
-            android:layout_height="35dp"
-            android:background="#1A1A1A"
-            android:gravity="center_vertical"
-            android:paddingLeft="10dp"
+            android:layout_height="wrap_content"
             android:text="Inspector"
-            android:textColor="#FFFFFF"
+            android:padding="8dp"
             android:textSize="11sp"
-            android:textStyle="bold" />
-    </LinearLayout>
+            android:textStyle="bold"
+            android:textColor="#CCCCCC"
+            android:background="#2D2D2D"/>
+
+        </LinearLayout>
+
 </LinearLayout>
