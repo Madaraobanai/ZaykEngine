@@ -89,7 +89,6 @@ public class MainActivity extends Activity {
             @Override public void afterTextChanged(Editable s) {}
         });
 
-        // Clique simples: Abrir pastas ou scripts
         listProject.setOnItemClickListener((parent, view, position, id) -> {
             FileNode node = displayList.get(position);
             selectedPath = node.file.getAbsolutePath();
@@ -104,7 +103,6 @@ public class MainActivity extends Activity {
             treeAdapter.notifyDataSetChanged();
         });
 
-        // Clique longo: Menu de opções (O que estava faltando)
         listProject.setOnItemLongClickListener((parent, view, position, id) -> {
             FileNode node = displayList.get(position);
             selectedPath = node.file.getAbsolutePath();
@@ -121,7 +119,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (mGLView != null) mGLView.onResume();
-        rootDir = new File(Environment.getExternalStorageDirectory(), "ZaykProjects");
+        rootDir = new File(Environment.getExternalStorageDirectory(), "ZaykEngine");
         if (hasStoragePermission()) {
             if (!rootDir.exists()) rootDir.mkdirs();
             refreshTree();
@@ -333,19 +331,24 @@ public class MainActivity extends Activity {
             ImageView typeIcon = v.findViewById(R.id.file_icon);
             ImageView arrowIcon = v.findViewById(R.id.folder_arrow);
             View indent = v.findViewById(R.id.file_indent);
+            
             v.setBackgroundColor(node.file.getAbsolutePath().equals(selectedPath) ? Color.parseColor("#444488FF") : Color.TRANSPARENT);
             indent.getLayoutParams().width = (node.level * 40);
+            
             typeIcon.setColorFilter(null);
+            
             if (node.file.isDirectory()) {
                 arrowIcon.setVisibility(View.VISIBLE);
                 arrowIcon.setImageResource(node.isExpanded ? android.R.drawable.arrow_down_float : android.R.drawable.ic_media_play);
-                typeIcon.setImageResource(android.R.drawable.ic_menu_today);
-                typeIcon.setColorFilter(Color.parseColor("#4CCBFF"), PorterDuff.Mode.SRC_IN);
+                
+                // --- ATUALIZADO: Usando seu PNG ic_folder ---
+                typeIcon.setImageResource(R.drawable.ic_folder);
                 name.setText(node.file.equals(rootDir) ? "res://" : node.file.getName());
             } else {
                 arrowIcon.setVisibility(View.INVISIBLE);
                 name.setText(node.file.getName());
                 String fn = node.file.getName().toLowerCase();
+                
                 if (fn.endsWith(".png") || fn.endsWith(".jpg") || fn.endsWith(".webp")) {
                     try {
                         BitmapFactory.Options opt = new BitmapFactory.Options();
@@ -354,9 +357,12 @@ public class MainActivity extends Activity {
                         if (thumb != null) typeIcon.setImageBitmap(thumb);
                         else typeIcon.setImageResource(android.R.drawable.ic_menu_gallery);
                     } catch (Exception e) { typeIcon.setImageResource(android.R.drawable.ic_menu_gallery); }
+                } else if (fn.endsWith(".lua")) {
+                    // --- ATUALIZADO: Usando seu PNG ic_lua_file ---
+                    typeIcon.setImageResource(R.drawable.ic_lua_file);
                 } else {
-                    typeIcon.setImageResource(fn.endsWith(".lua") ? android.R.drawable.ic_menu_edit : android.R.drawable.ic_menu_report_image);
-                    typeIcon.setColorFilter(fn.endsWith(".lua") ? Color.YELLOW : Color.LTGRAY, PorterDuff.Mode.SRC_IN);
+                    typeIcon.setImageResource(android.R.drawable.ic_menu_report_image);
+                    typeIcon.setColorFilter(Color.LTGRAY, PorterDuff.Mode.SRC_IN);
                 }
             }
             return v;

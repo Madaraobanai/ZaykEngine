@@ -6,59 +6,85 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 
 public class Grid {
-    private FloatBuffer vertexBuffer;
+    private FloatBuffer lineBuffer, floorBuffer;
     private int mProgram;
-    private float[] gridCoords;
-    private int vertexCount;
+    private int lineCount;
 
     public Grid() {
-        int size = 40;
-        gridCoords = new float[(size + 1) * 4 * 3];
-        int index = 0;
+        int size = 120;
+        float[] lines = new float[(size + 1) * 4 * 3];
+        int idx = 0;
         for (int i = -size / 2; i <= size / 2; i++) {
-            gridCoords[index++] = i; gridCoords[index++] = 0; gridCoords[index++] = -size / 2f;
-            gridCoords[index++] = i; gridCoords[index++] = 0; gridCoords[index++] = size / 2f;
-            gridCoords[index++] = -size / 2f; gridCoords[index++] = 0; gridCoords[index++] = i;
-            gridCoords[index++] = size / 2f;  gridCoords[index++] = 0; gridCoords[index++] = i;
+            lines[idx++] = i; lines[idx++] = 0; lines[idx++] = -size / 2f;
+            lines[idx++] = i; lines[idx++] = 0; lines[idx++] = size / 2f;
+            lines[idx++] = -size / 2f; lines[idx++] = 0; lines[idx++] = i;
+            lines[idx++] = size / 2f;  lines[idx++] = 0; lines[idx++] = i;
         }
-        vertexCount = gridCoords.length / 3;
+        lineCount = lines.length / 3;
+        lineBuffer = createBuffer(lines);
+
+        float s = size / 2f;
+        float[] floor = {-s,-0.05f,-s, s,-0.05f,-s, -s,-0.05f,s, -s,-0.05f,s, s,-0.05f,-s, s,-0.05f,s};
+        floorBuffer = createBuffer(floor);
+    }
+
+    private FloatBuffer createBuffer(float[] data) {
+        ByteBuffer bb = ByteBuffer.allocateDirect(data.length * 4);
+        bb.order(ByteOrder.nativeOrder());
+        FloatBuffer fb = bb.asFloatBuffer();
+        fb.put(data); fb.position(0);
+        return fb;
     }
 
     public void setup() {
-        ByteBuffer bb = ByteBuffer.allocateDirect(gridCoords.length * 4);
-        bb.order(ByteOrder.nativeOrder());
-        vertexBuffer = bb.asFloatBuffer();
-        vertexBuffer.put(gridCoords);
-        vertexBuffer.position(0);
+        String vs = 
+            "uniform mat4 uVPMatrix; attribute vec4 vPosition; varying float vDist; " +
+            "void main() { gl_Position = uVPMatrix * vPosition; vDist = gl_Position.z; }";
+        
+        String fs = 
+            "precision mediump float; uniform vec4 uColor; uniform vec4 uFogColor; " +
+            "uniform float uFogStart; uniform float uFogEnd; uniform int uFogEnabled; " +
+            "varying float vDist; " +
+            "void main() { " +
+            "  vec4 finalColor = uColor; " +
+            "  if(uFogEnabled == 1) { " +
+            "    float fogFactor = clamp((vDist - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0); " +
+            "    finalColor = mix(uColor, uFogColor, fogFactor); " +
+            "  } " +
+            "  gl_FragColor = finalColor; " +
+            "}";
 
-        // Compilação simples de shader para a grade
-        int vs = GLES20.glCreateShader(GLES20.GL_VERTEX_SHADER);
-        GLES20.glShaderSource(vs, "uniform mat4 uVPMatrix; attribute vec4 vPosition; void main() { gl_Position = uVPMatrix * vPosition; }");
-        GLES20.glCompileShader(vs);
-
-        int fs = GLES20.glCreateShader(GLES20.GL_FRAGMENT_SHADER);
-        GLES20.glShaderSource(fs, "precision mediump float; void main() { gl_FragColor = vec4(0.5, 0.5, 0.5, 1.0); }");
-        GLES20.glCompileShader(fs);
-
+        int vS = loadShader(GLES20.GL_VERTEX_SHADER, vs);
+        int fS = loadShader(GLES20.GL_FRAGMENT_SHADER, fs);
         mProgram = GLES20.glCreateProgram();
-        GLES20.glAttachShader(mProgram, vs);
-        GLES20.glAttachShader(mProgram, fs);
+        GLES20.glAttachShader(mProgram, vS); GLES20.glAttachShader(mProgram, fS);
         GLES20.glLinkProgram(mProgram);
     }
 
-    public void draw(float[] mvpMatrix) {
+    public void draw(float[] mvpMatrix, Fog fogSystem) {
         GLES20.glUseProgram(mProgram);
-        int matrixHandle = GLES20.glGetUniformLocation(mProgram, "uVPMatrix");
-        GLES20.glUniformMatrix4fv(matrixHandle, 1, false, mvpMatrix, 0);
+        int mH = GLES20.glGetUniformLocation(mProgram, "uVPMatrix");
+        int cH = GLES20.glGetUniformLocation(mProgram, "uColor");
+        int pH = GLES20.glGetAttribLocation(mProgram, "vPosition");
 
-        int posHandle = GLES20.glGetAttribLocation(mProgram, "vPosition");
-        GLES20.glEnableVertexAttribArray(posHandle);
-        GLES20.glVertexAttribPointer(posHandle, 3, GLES20.GL_FLOAT, false, 12, vertexBuffer);
+        GLES20.glUniformMatrix4fv(mH, 1, false, mvpMatrix, 0);
+        
+        // Aplica o sistema de neblina separado
+        fogSystem.apply(mProgram);
 
-        GLES20.glDrawArrays(GLES20.GL_LINES, 0, vertexCount);
-        GLES20.glDisableVertexAttribArray(posHandle);
+        GLES20.glEnableVertexAttribArray(pH);
+        GLES20.glVertexAttribPointer(pH, 3, GLES20.GL_FLOAT, false, 0, floorBuffer);
+        GLES20.glUniform4f(cH, 0.25f, 0.25f, 0.25f, 1.0f); 
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 6);
+
+        GLES20.glVertexAttribPointer(pH, 3, GLES20.GL_FLOAT, false, 0, lineBuffer);
+        GLES20.glUniform4f(cH, 0.45f, 0.45f, 0.45f, 1.0f); 
+        GLES20.glDrawArrays(GLES20.GL_LINES, 0, lineCount);
     }
 
-    public void addBlock(int x, int y, int z, int type) {}
-    public void clear() {}
+    private int loadShader(int type, String code) {
+        int s = GLES20.glCreateShader(type);
+        GLES20.glShaderSource(s, code); GLES20.glCompileShader(s);
+        return s;
+    }
 }
