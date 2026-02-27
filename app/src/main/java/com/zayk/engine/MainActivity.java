@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ClipData;
+import android.content.ClipDescription;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
@@ -22,6 +23,7 @@ import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.ContextThemeWrapper;
+import android.view.DragEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MotionEvent;
@@ -75,6 +77,9 @@ public class MainActivity extends Activity {
 
         mGLView = findViewById(R.id.zayk_surface_view);
         
+        // --- NOVO: Configura o listener de Drop na View 3D ---
+        setupDragAndDrop();
+
         ListView listProject = findViewById(R.id.list_project);
         treeAdapter = new FileTreeAdapter();
         listProject.setAdapter(treeAdapter);
@@ -107,13 +112,64 @@ public class MainActivity extends Activity {
             FileNode node = displayList.get(position);
             selectedPath = node.file.getAbsolutePath();
             treeAdapter.notifyDataSetChanged();
-            showGodotMenu(view, node.file);
+            
+            // --- MODIFICADO: Se for .obj, inicia o arraste, senão abre o menu ---
+            if (node.file.getName().toLowerCase().endsWith(".obj")) {
+                startModelDrag(view, node.file);
+            } else {
+                showGodotMenu(view, node.file);
+            }
             return true;
         });
 
         setupResizers();
         checkPermissions();
     }
+
+    // --- MÉTODOS DE DRAG AND DROP ---
+
+    private void startModelDrag(View view, File file) {
+        ClipData.Item item = new ClipData.Item(file.getName());
+        ClipData dragData = new ClipData(
+            file.getName(),
+            new String[]{ClipDescription.MIMETYPE_TEXT_PLAIN},
+            item
+        );
+
+        View.DragShadowBuilder shadowBuilder = new View.DragShadowBuilder(view);
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            view.startDragAndDrop(dragData, shadowBuilder, null, 0);
+        } else {
+            view.startDrag(dragData, shadowBuilder, null, 0);
+        }
+    }
+
+    private void setupDragAndDrop() {
+        mGLView.setOnDragListener((v, event) -> {
+            switch (event.getAction()) {
+                case DragEvent.ACTION_DRAG_STARTED:
+                    return event.getClipDescription().hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN);
+
+                case DragEvent.ACTION_DROP:
+                    ClipData.Item item = event.getClipData().getItemAt(0);
+                    String modelName = item.getText().toString();
+
+                    ZaykRenderer renderer = mGLView.getRenderer();
+                    if (renderer != null) {
+                        // Calcula posição 3D baseada no toque
+                        float[] worldPos = renderer.screenToWorld(event.getX(), event.getY());
+                        // Spawna o modelo no local
+                        renderer.spawnModel(modelName, worldPos[0], worldPos[1], worldPos[2]);
+                        Toast.makeText(this, "Adicionado: " + modelName, Toast.LENGTH_SHORT).show();
+                    }
+                    return true;
+            }
+            return true;
+        });
+    }
+
+    // --- RESTO DO CÓDIGO ORIGINAL ---
 
     @Override
     protected void onResume() {
@@ -340,8 +396,6 @@ public class MainActivity extends Activity {
             if (node.file.isDirectory()) {
                 arrowIcon.setVisibility(View.VISIBLE);
                 arrowIcon.setImageResource(node.isExpanded ? android.R.drawable.arrow_down_float : android.R.drawable.ic_media_play);
-                
-                // --- ATUALIZADO: Usando seu PNG ic_folder ---
                 typeIcon.setImageResource(R.drawable.ic_folder);
                 name.setText(node.file.equals(rootDir) ? "res://" : node.file.getName());
             } else {
@@ -358,8 +412,11 @@ public class MainActivity extends Activity {
                         else typeIcon.setImageResource(android.R.drawable.ic_menu_gallery);
                     } catch (Exception e) { typeIcon.setImageResource(android.R.drawable.ic_menu_gallery); }
                 } else if (fn.endsWith(".lua")) {
-                    // --- ATUALIZADO: Usando seu PNG ic_lua_file ---
                     typeIcon.setImageResource(R.drawable.ic_lua_file);
+                } else if (fn.endsWith(".obj")) {
+                    // Ícone específico para modelos 3D
+                    typeIcon.setImageResource(android.R.drawable.ic_menu_directions);
+                    typeIcon.setColorFilter(Color.CYAN, PorterDuff.Mode.SRC_IN);
                 } else {
                     typeIcon.setImageResource(android.R.drawable.ic_menu_report_image);
                     typeIcon.setColorFilter(Color.LTGRAY, PorterDuff.Mode.SRC_IN);

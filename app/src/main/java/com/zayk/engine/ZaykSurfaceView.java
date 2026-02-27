@@ -13,13 +13,11 @@ public class ZaykSurfaceView extends GLSurfaceView {
 
     private ZaykRenderer mRenderer;
 
-    // Construtor para criação via código
     public ZaykSurfaceView(Context context) {
         super(context);
         init(context);
     }
 
-    // CONSTRUTOR ESSENCIAL: Permite que o XML encontre esta View
     public ZaykSurfaceView(Context context, AttributeSet attrs) {
         super(context, attrs);
         init(context);
@@ -36,8 +34,8 @@ public class ZaykSurfaceView extends GLSurfaceView {
         mRenderer = new ZaykRenderer(context, grid);
         setRenderer(mRenderer);
 
-        // 4. Configura para renderizar apenas quando houver mudanças (economiza bateria)
-        // Se preferir fluidez total de drone, mude para RENDERMODE_CONTINUOUSLY
+        // 4. Renderização contínua para garantir que o movimento da Flycam 
+        // e o spawn de modelos sejam atualizados instantaneamente.
         setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
     }
 
@@ -50,6 +48,10 @@ public class ZaykSurfaceView extends GLSurfaceView {
         return true;
     }
 
+    /**
+     * Essencial para o Drag and Drop na MainActivity.
+     * Permite acessar o método screenToWorld() do Renderer.
+     */
     public ZaykRenderer getRenderer() {
         return mRenderer;
     }
