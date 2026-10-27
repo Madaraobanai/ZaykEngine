@@ -70,19 +70,22 @@ void main(){
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aCol;
 uniform mat4 uVP;
-uniform vec3 uCam;
 out vec3 vC;
-out float vA;
+out vec3 vP;
 void main(){
   vC = aCol;
-  vA = 1.0 - clamp(distance(aPos.xz, uCam.xz) / 70.0, 0.0, 1.0);
+  vP = aPos;
   gl_Position = uVP * vec4(aPos, 1.0);
 }"""
 
     const val LINE_FRAG = """#version 300 es
-precision mediump float;
+precision highp float;
 in vec3 vC;
-in float vA;
+in vec3 vP;
+uniform vec3 uCam;
 out vec4 outColor;
-void main(){ outColor = vec4(vC, vA); }"""
+void main(){
+  float a = 1.0 - clamp(distance(vP.xz, uCam.xz) / 70.0, 0.0, 1.0);
+  outColor = vec4(vC, a);
+}"""
 }
