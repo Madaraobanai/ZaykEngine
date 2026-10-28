@@ -46,6 +46,8 @@ class ZaykRenderer(private val onFps: (Int) -> Unit) : GLSurfaceView.Renderer {
         meshes[MeshKind.CUBE] = Primitives.cube()
         meshes[MeshKind.SPHERE] = Primitives.sphere()
         meshes[MeshKind.PLANE] = Primitives.plane()
+        // contexto GL novo: modelos importados precisam ser recriados na GPU
+        for (e in entities) e.gpu = null
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glEnable(GL.GL_CULL_FACE)
         last = System.nanoTime()
@@ -56,22 +58,36 @@ class ZaykRenderer(private val onFps: (Int) -> Unit) : GLSurfaceView.Renderer {
         aspect = width.toFloat() / max(height, 1)
     }
 
+    private fun placeInFront(e: Entity, y: Float) {
+        e.position[0] = snap(camera.pos[0] - sin(camera.yaw) * 6f)
+        e.position[1] = y
+        e.position[2] = snap(camera.pos[2] - cos(camera.yaw) * 6f)
+    }
+
     /** Chamar via glView.queueEvent { renderer.spawn(...) } */
     fun spawn(kind: MeshKind) {
         val name = when (kind) {
             MeshKind.CUBE -> "Cubo"
             MeshKind.SPHERE -> "Esfera"
             MeshKind.PLANE -> "Plano"
+            MeshKind.MODEL -> "Modelo"
         }
         counter++
         val e = Entity("$name $counter", kind)
-        e.position[0] = snap(camera.pos[0] - sin(camera.yaw) * 6f)
-        e.position[1] = if (kind == MeshKind.PLANE) 0.01f else 0.5f
-        e.position[2] = snap(camera.pos[2] - cos(camera.yaw) * 6f)
+        placeInFront(e, if (kind == MeshKind.PLANE) 0.01f else 0.5f)
         if (kind == MeshKind.PLANE) {
             e.scale[0] = 4f
             e.scale[2] = 4f
         }
+        entities.add(e)
+    }
+
+    /** Chamar via glView.queueEvent { renderer.spawnModel(...) } */
+    fun spawnModel(name: String, parts: List<MeshData>) {
+        counter++
+        val e = Entity("$name $counter", MeshKind.MODEL, parts)
+        e.color = floatArrayOf(1f, 1f, 1f)
+        placeInFront(e, 0f)
         entities.add(e)
     }
 
@@ -129,8 +145,19 @@ class ZaykRenderer(private val onFps: (Int) -> Unit) : GLSurfaceView.Renderer {
             Matrix.rotateM(model, 0, deg(e.rotation[2]), 0f, 0f, 1f)
             Matrix.scaleM(model, 0, e.scale[0], e.scale[1], e.scale[2])
             GL.glUniformMatrix4fv(lit.loc("uModel"), 1, false, model, 0)
-            GL.glUniform3f(lit.loc("uColor"), e.color[0], e.color[1], e.color[2])
-            meshes[e.kind]?.draw()
+
+            val parts = e.parts
+            if (parts != null) {
+                val gpu = e.gpu ?: parts.map { Mesh(it.vertices, it.indices) }.also { e.gpu = it }
+                for (i in gpu.indices) {
+                    val c = parts[i].color
+                    GL.glUniform3f(lit.loc("uColor"), c[0] * e.color[0], c[1] * e.color[1], c[2] * e.color[2])
+                    gpu[i].draw()
+                }
+            } else {
+                GL.glUniform3f(lit.loc("uColor"), e.color[0], e.color[1], e.color[2])
+                meshes[e.kind]?.draw()
+            }
         }
 
         // Grid

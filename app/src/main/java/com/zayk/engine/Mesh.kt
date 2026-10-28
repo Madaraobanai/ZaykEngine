@@ -4,8 +4,12 @@ import android.opengl.GLES30 as GL
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** vertices: [x,y,z, a,b,c] intercalado (normal ou cor); indices em Short. */
-class Mesh(vertices: FloatArray, indices: ShortArray, private val mode: Int = GL.GL_TRIANGLES) {
+/** vertices: [x,y,z, a,b,c] intercalado (normal ou cor). */
+class Mesh(vertices: FloatArray, indices: IntArray, private val mode: Int = GL.GL_TRIANGLES) {
+
+    constructor(vertices: FloatArray, indices: ShortArray, mode: Int = GL.GL_TRIANGLES) :
+        this(vertices, IntArray(indices.size) { indices[it].toInt() and 0xFFFF }, mode)
+
     private val vao: Int
     private val count = indices.size
 
@@ -27,16 +31,16 @@ class Mesh(vertices: FloatArray, indices: ShortArray, private val mode: Int = GL
         GL.glEnableVertexAttribArray(1)
         GL.glVertexAttribPointer(1, 3, GL.GL_FLOAT, false, 24, 12)
 
-        val ib = ByteBuffer.allocateDirect(indices.size * 2).order(ByteOrder.nativeOrder()).asShortBuffer()
+        val ib = ByteBuffer.allocateDirect(indices.size * 4).order(ByteOrder.nativeOrder()).asIntBuffer()
         ib.put(indices).position(0)
         GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, bufs[1])
-        GL.glBufferData(GL.GL_ELEMENT_ARRAY_BUFFER, indices.size * 2, ib, GL.GL_STATIC_DRAW)
+        GL.glBufferData(GL.GL_ELEMENT_ARRAY_BUFFER, indices.size * 4, ib, GL.GL_STATIC_DRAW)
 
         GL.glBindVertexArray(0)
     }
 
     fun draw() {
         GL.glBindVertexArray(vao)
-        GL.glDrawElements(mode, count, GL.GL_UNSIGNED_SHORT, 0)
+        GL.glDrawElements(mode, count, GL.GL_UNSIGNED_INT, 0)
     }
 }

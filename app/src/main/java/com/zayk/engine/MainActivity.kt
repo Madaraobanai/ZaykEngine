@@ -1,7 +1,9 @@
 package com.zayk.engine
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Typeface
+import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.MotionEvent
@@ -10,6 +12,9 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+
+private const val REQ_GLB = 42
 
 class MainActivity : Activity() {
 
@@ -56,6 +61,7 @@ class MainActivity : Activity() {
             addView(btn("+ Cubo") { glView.queueEvent { renderer.spawn(MeshKind.CUBE) } })
             addView(btn("+ Esfera") { glView.queueEvent { renderer.spawn(MeshKind.SPHERE) } })
             addView(btn("+ Plano") { glView.queueEvent { renderer.spawn(MeshKind.PLANE) } })
+            addView(btn("Importar .glb") { openPicker() })
         }
 
         fun holdBtn(label: String, value: Float) = btn(label).apply {
@@ -92,6 +98,39 @@ class MainActivity : Activity() {
             Gravity.BOTTOM or Gravity.END
         ).apply { bottomMargin = dp(12); rightMargin = dp(12) })
         setContentView(root)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun openPicker() {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(i, REQ_GLB)
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_GLB && resultCode == RESULT_OK) {
+            val uri = data?.data
+            if (uri != null) importGlb(uri)
+        }
+    }
+
+    private fun importGlb(uri: Uri) {
+        Toast.makeText(this, "Importando modelo...", Toast.LENGTH_SHORT).show()
+        Thread {
+            try {
+                val bytes = contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+                val parts = GlbLoader.load(bytes)
+                glView.queueEvent { renderer.spawnModel("Modelo", parts) }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "Erro ao importar: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
