@@ -1,9 +1,13 @@
 package com.zayk.engine
 
 import android.opengl.Matrix
+import android.util.Base64
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.net.URLDecoder
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.zip.ZipInputStream
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
@@ -12,35 +16,120 @@ class MeshData(val vertices: FloatArray, val indices: IntArray, val color: Float
 
 object GlbLoader {
 
-    private class Glb(val json: JSONObject, val buf: ByteBuffer, val binStart: Int)
+    private class Model(val json: JSONObject, val buffers: List<ByteBuffer>)
 
-    fun load(bytes: ByteArray): List<MeshData> {
-        val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
-        if (bytes.size < 20 || buf.getInt(0) != 0x46546C67) {
-            throw IllegalArgumentException("Não é um arquivo .glb válido")
+    private fun isZip(b: ByteArray) = b.size > 4 && b[0] == 0x50.toByte() && b[1] == 0x4B.toByte()
+
+    private fun isGlb(b: ByteArray) = b.size >= 20 &&
+        b[0] == 'g'.code.toByte() && b[1] == 'l'.code.toByte() &&
+        b[2] == 'T'.code.toByte() && b[3] == 'F'.code.toByte()
+
+    private fun isJson(b: ByteArray): Boolean {
+        for (x in b) {
+            val c = x.toInt().toChar()
+            if (c == ' ' || c == '\n' || c == '\r' || c == '\t') continue
+            return c == '{'
         }
+        return false
+    }
+
+    private fun describe(files: Map<String, ByteArray>): String {
+        val sb = StringBuilder("Formato não reconhecido.")
+        for ((name, b) in files) {
+            val head = String(CharArray(min(12, b.size)) {
+                val c = b[it].toInt()
+                if (c in 32..126) c.toChar() else '.'
+            })
+            sb.append("\n").append(name).append(" | ").append(b.size).append(" bytes | começa com: ").append(head)
+        }
+        return sb.toString()
+    }
+
+    /** files: nome -> bytes. Aceita .glb, .gltf (+ .bin) e .zip com esses arquivos. */
+    fun load(input: Map<String, ByteArray>): List<MeshData> {
+        val files = LinkedHashMap<String, ByteArray>()
+        for ((name, bytes) in input) {
+            if (isZip(bytes)) {
+                ZipInputStream(ByteArrayInputStream(bytes)).use { z ->
+                    while (true) {
+                        val e = z.nextEntry ?: break
+                        if (!e.isDirectory) files[e.name.substringAfterLast('/')] = z.readBytes()
+                    }
+                }
+            } else {
+                files[name.substringAfterLast('/')] = bytes
+            }
+        }
+
+        val glbName = files.keys.firstOrNull { isGlb(files[it]!!) }
+        if (glbName != null) return build(parseGlb(files[glbName]!!))
+
+        val gltfName = files.keys.firstOrNull { it.endsWith(".gltf", true) && isJson(files[it]!!) }
+            ?: files.keys.firstOrNull { isJson(files[it]!!) }
+        if (gltfName != null) return build(parseGltf(files[gltfName]!!, files))
+
+        throw IllegalArgumentException(describe(files))
+    }
+
+    private fun wrap(b: ByteArray, start: Int = 0, len: Int = b.size): ByteBuffer =
+        ByteBuffer.wrap(b, start, len).slice().order(ByteOrder.LITTLE_ENDIAN)
+
+    private fun parseGlb(bytes: ByteArray): Model {
+        val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         var pos = 12
         var json: JSONObject? = null
-        var binStart = -1
+        var bin: ByteBuffer? = null
         while (pos + 8 <= bytes.size) {
             val len = buf.getInt(pos)
             val type = buf.getInt(pos + 4)
             val start = pos + 8
             if (type == 0x4E4F534A) {
                 json = JSONObject(String(bytes, start, len, Charsets.UTF_8))
-            } else if (type == 0x004E4942 && binStart < 0) {
-                binStart = start
+            } else if (type == 0x004E4942 && bin == null) {
+                bin = wrap(bytes, start, len)
             }
             pos = start + len
         }
         if (json == null) throw IllegalArgumentException("JSON ausente no .glb")
-        val g = Glb(json, buf, binStart)
+        return Model(json, if (bin != null) listOf(bin) else emptyList())
+    }
 
-        val nodes = json.optJSONArray("nodes") ?: throw IllegalArgumentException("Modelo sem nós")
+    private fun parseGltf(jsonBytes: ByteArray, files: Map<String, ByteArray>): Model {
+        val json = JSONObject(String(jsonBytes, Charsets.UTF_8))
+        val list = ArrayList<ByteBuffer>()
+        val arr = json.optJSONArray("buffers")
+        if (arr != null) {
+            for (i in 0 until arr.length()) {
+                val uri = arr.getJSONObject(i).optString("uri", "")
+                val data: ByteArray = if (uri.startsWith("data:")) {
+                    Base64.decode(uri.substringAfter(","), Base64.DEFAULT)
+                } else {
+                    val name = URLDecoder.decode(uri, "UTF-8").substringAfterLast('/')
+                    files[name]
+                        ?: files.entries.firstOrNull { it.key.equals(name, true) }?.value
+                        ?: throw IllegalArgumentException("Falta o arquivo \"$name\". Selecione o .gltf e o .bin juntos.")
+                }
+                list.add(wrap(data))
+            }
+        }
+        return Model(json, list)
+    }
+
+    private fun build(m: Model): List<MeshData> {
+        val ext = m.json.optJSONArray("extensionsRequired")
+        if (ext != null) {
+            for (i in 0 until ext.length()) {
+                val e = ext.getString(i)
+                if (e.contains("draco", true) || e.contains("meshopt", true) || e.contains("quantization", true)) {
+                    throw IllegalArgumentException("Modelo usa extensão não suportada: $e")
+                }
+            }
+        }
+        val nodes = m.json.optJSONArray("nodes") ?: throw IllegalArgumentException("Modelo sem nós")
         val roots = ArrayList<Int>()
-        val scenes = json.optJSONArray("scenes")
+        val scenes = m.json.optJSONArray("scenes")
         if (scenes != null && scenes.length() > 0) {
-            val sc = scenes.getJSONObject(json.optInt("scene", 0))
+            val sc = scenes.getJSONObject(m.json.optInt("scene", 0))
             val list = sc.optJSONArray("nodes")
             if (list != null) for (i in 0 until list.length()) roots.add(list.getInt(i))
         } else {
@@ -55,34 +144,34 @@ object GlbLoader {
         val identity = FloatArray(16)
         Matrix.setIdentityM(identity, 0)
         val parts = ArrayList<MeshData>()
-        for (r in roots) traverse(g, r, identity, parts, 0)
+        for (r in roots) traverse(m, r, identity, parts, 0)
         if (parts.isEmpty()) throw IllegalArgumentException("Nenhuma malha encontrada")
         return fit(parts)
     }
 
-    private fun traverse(g: Glb, idx: Int, parent: FloatArray, parts: ArrayList<MeshData>, depth: Int) {
+    private fun traverse(m: Model, idx: Int, parent: FloatArray, parts: ArrayList<MeshData>, depth: Int) {
         if (depth > 64) return
-        val node = g.json.getJSONArray("nodes").getJSONObject(idx)
+        val node = m.json.getJSONArray("nodes").getJSONObject(idx)
         val local = localMatrix(node)
         val world = FloatArray(16)
         Matrix.multiplyMM(world, 0, parent, 0, local, 0)
-        if (node.has("mesh")) addMesh(g, node.getInt("mesh"), world, parts)
+        if (node.has("mesh")) addMesh(m, node.getInt("mesh"), world, parts)
         val ch = node.optJSONArray("children")
-        if (ch != null) for (i in 0 until ch.length()) traverse(g, ch.getInt(i), world, parts, depth + 1)
+        if (ch != null) for (i in 0 until ch.length()) traverse(m, ch.getInt(i), world, parts, depth + 1)
     }
 
     private fun localMatrix(node: JSONObject): FloatArray {
-        val m = FloatArray(16)
+        val mtx = FloatArray(16)
         val mat = node.optJSONArray("matrix")
         if (mat != null && mat.length() == 16) {
-            for (i in 0 until 16) m[i] = mat.getDouble(i).toFloat()
-            return m
+            for (i in 0 until 16) mtx[i] = mat.getDouble(i).toFloat()
+            return mtx
         }
         val t = node.optJSONArray("translation")
         val r = node.optJSONArray("rotation")
         val s = node.optJSONArray("scale")
-        Matrix.setIdentityM(m, 0)
-        if (t != null) Matrix.translateM(m, 0, t.getDouble(0).toFloat(), t.getDouble(1).toFloat(), t.getDouble(2).toFloat())
+        Matrix.setIdentityM(mtx, 0)
+        if (t != null) Matrix.translateM(mtx, 0, t.getDouble(0).toFloat(), t.getDouble(1).toFloat(), t.getDouble(2).toFloat())
         val rot = FloatArray(16)
         Matrix.setIdentityM(rot, 0)
         if (r != null) {
@@ -95,13 +184,13 @@ object GlbLoader {
             rot[8] = 2 * (x * z + y * w); rot[9] = 2 * (y * z - x * w); rot[10] = 1 - 2 * (x * x + y * y)
         }
         val out = FloatArray(16)
-        Matrix.multiplyMM(out, 0, m, 0, rot, 0)
+        Matrix.multiplyMM(out, 0, mtx, 0, rot, 0)
         if (s != null) Matrix.scaleM(out, 0, s.getDouble(0).toFloat(), s.getDouble(1).toFloat(), s.getDouble(2).toFloat())
         return out
     }
 
-    private fun addMesh(g: Glb, meshIdx: Int, world: FloatArray, parts: ArrayList<MeshData>) {
-        val meshes = g.json.optJSONArray("meshes") ?: return
+    private fun addMesh(m: Model, meshIdx: Int, world: FloatArray, parts: ArrayList<MeshData>) {
+        val meshes = m.json.optJSONArray("meshes") ?: return
         val prims = meshes.getJSONObject(meshIdx).optJSONArray("primitives") ?: return
         for (p in 0 until prims.length()) {
             val prim = prims.getJSONObject(p)
@@ -109,10 +198,10 @@ object GlbLoader {
             val attrs = prim.getJSONObject("attributes")
             if (!attrs.has("POSITION")) continue
 
-            val pos = readFloats(g, attrs.getInt("POSITION"), 3)
+            val pos = readFloats(m, attrs.getInt("POSITION"), 3)
             val vcount = pos.size / 3
-            val idx = if (prim.has("indices")) readIndices(g, prim.getInt("indices")) else IntArray(vcount) { it }
-            val nor = if (attrs.has("NORMAL")) readFloats(g, attrs.getInt("NORMAL"), 3) else computeNormals(pos, idx)
+            val idx = if (prim.has("indices")) readIndices(m, prim.getInt("indices")) else IntArray(vcount) { it }
+            val nor = if (attrs.has("NORMAL")) readFloats(m, attrs.getInt("NORMAL"), 3) else computeNormals(pos, idx)
 
             val out = FloatArray(vcount * 6)
             val v = FloatArray(4)
@@ -128,12 +217,12 @@ object GlbLoader {
                 if (l == 0f) l = 1f
                 out[i * 6 + 3] = tmp[0] / l; out[i * 6 + 4] = tmp[1] / l; out[i * 6 + 5] = tmp[2] / l
             }
-            parts.add(MeshData(out, idx, materialColor(g, prim)))
+            parts.add(MeshData(out, idx, materialColor(m, prim)))
         }
     }
 
-    private fun materialColor(g: Glb, prim: JSONObject): FloatArray {
-        val mats = g.json.optJSONArray("materials")
+    private fun materialColor(m: Model, prim: JSONObject): FloatArray {
+        val mats = m.json.optJSONArray("materials")
         val mi = prim.optInt("material", -1)
         if (mats == null || mi < 0 || mi >= mats.length()) return floatArrayOf(0.8f, 0.8f, 0.8f)
         val c = floatArrayOf(1f, 1f, 1f)
@@ -142,27 +231,32 @@ object GlbLoader {
         return c
     }
 
-    private fun readFloats(g: Glb, accIdx: Int, comps: Int): FloatArray {
-        val acc = g.json.getJSONArray("accessors").getJSONObject(accIdx)
+    private fun readFloats(m: Model, accIdx: Int, comps: Int): FloatArray {
+        val acc = m.json.getJSONArray("accessors").getJSONObject(accIdx)
+        if (acc.getInt("componentType") != 5126) {
+            throw IllegalArgumentException("Vértices comprimidos não são suportados")
+        }
         val count = acc.getInt("count")
         val out = FloatArray(count * comps)
         if (!acc.has("bufferView")) return out
-        val bv = g.json.getJSONArray("bufferViews").getJSONObject(acc.getInt("bufferView"))
-        val base = g.binStart + bv.optInt("byteOffset", 0) + acc.optInt("byteOffset", 0)
+        val bv = m.json.getJSONArray("bufferViews").getJSONObject(acc.getInt("bufferView"))
+        val buf = m.buffers[bv.optInt("buffer", 0)]
+        val base = bv.optInt("byteOffset", 0) + acc.optInt("byteOffset", 0)
         val s = bv.optInt("byteStride", 0)
         val stride = if (s == 0) comps * 4 else s
         for (i in 0 until count) {
-            for (c in 0 until comps) out[i * comps + c] = g.buf.getFloat(base + i * stride + c * 4)
+            for (c in 0 until comps) out[i * comps + c] = buf.getFloat(base + i * stride + c * 4)
         }
         return out
     }
 
-    private fun readIndices(g: Glb, accIdx: Int): IntArray {
-        val acc = g.json.getJSONArray("accessors").getJSONObject(accIdx)
+    private fun readIndices(m: Model, accIdx: Int): IntArray {
+        val acc = m.json.getJSONArray("accessors").getJSONObject(accIdx)
         val count = acc.getInt("count")
         val type = acc.getInt("componentType")
-        val bv = g.json.getJSONArray("bufferViews").getJSONObject(acc.getInt("bufferView"))
-        val base = g.binStart + bv.optInt("byteOffset", 0) + acc.optInt("byteOffset", 0)
+        val bv = m.json.getJSONArray("bufferViews").getJSONObject(acc.getInt("bufferView"))
+        val buf = m.buffers[bv.optInt("buffer", 0)]
+        val base = bv.optInt("byteOffset", 0) + acc.optInt("byteOffset", 0)
         val size = when (type) {
             5121 -> 1
             5123 -> 2
@@ -174,9 +268,9 @@ object GlbLoader {
         for (i in 0 until count) {
             val p = base + i * stride
             out[i] = when (type) {
-                5121 -> g.buf.get(p).toInt() and 0xFF
-                5123 -> g.buf.getShort(p).toInt() and 0xFFFF
-                else -> g.buf.getInt(p)
+                5121 -> buf.get(p).toInt() and 0xFF
+                5123 -> buf.getShort(p).toInt() and 0xFFFF
+                else -> buf.getInt(p)
             }
         }
         return out
