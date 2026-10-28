@@ -5,6 +5,7 @@
 
     <application
         android:label="ZaykEngine"
+        android:icon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
         <activity
             android:name=".MainActivity"
