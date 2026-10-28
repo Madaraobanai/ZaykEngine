@@ -20,7 +20,7 @@ jobs:
       - run: gradle assembleDebug
       - name: Publicar APK
         env:
-          GH_TOKEN: ${{ github.token }}
+                    GH_TOKEN: ${{ secrets.MEU_TOKEN }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest app/build/outputs/apk/debug/app-debug.apk --title "ZaykEngine (último build)" --notes "Build automático"
